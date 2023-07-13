@@ -44,6 +44,7 @@ class UAVEnv(object):
 
     action_bound = [-1, 1]  # 对应tahn激活函数
     action_dim = 4  # 第一位表示服务的ue id;中间两位表示飞行角度和距离；后1位表示目前服务于UE的卸载率
+    #id của ue phục vụ, góc bay, khoảng cách, offloading ratio
     state_dim = 4 + M * 4  # uav battery remain, uav loc, remaining sum task size, all ue loc, all ue task size, all ue block_flag
 
     def __init__(self):
@@ -101,18 +102,24 @@ class UAVEnv(object):
         # 采用最近距离算法, 有错误.如果最近距离无人机就一直停在头上了(错)
         # 随机轮询:先生成一个随机数队列, 服务完就剔除UE, 队列为空再次随机生成(逻辑不对)
         # 控制变量映射到各个变量的取值区间
+        # Phạm vi giá trị là -1~1 hành động -> 0~1 hành động. Tránh đào tạo hàm tanh mạng diễn viên để luôn lấy ranh giới 0 khi action_bound ban đầu là [0,1]
+         ################################################# ##################################
+         # Cải thiện ddpg, thêm một lớp vào lớp đầu ra để xuất các hành động rời rạc (kết quả triển khai bị sai)
+         # Sử dụng thuật toán khoảng cách ngắn nhất, có lỗi Nếu máy bay không người lái ở khoảng cách ngắn nhất đã đậu trên đầu (sai)
+         # Bỏ phiếu ngẫu nhiên: đầu tiên tạo hàng đợi số ngẫu nhiên, loại bỏ UE sau khi hoàn thành dịch vụ và tạo lại ngẫu nhiên khi hàng đợi trống (logic sai)
+         # Các biến điều khiển được ánh xạ tới phạm vi giá trị của từng biến
         if action[0] == 1:
             ue_id = self.M - 1
         else:
             ue_id = int(self.M * action[0])
 
-        theta = action[1] * np.pi * 2  # 角度
+        theta = action[1] * np.pi * 2  # 角度 - góc
         offloading_ratio = action[3]  # ue卸载率
         task_size = self.task_list[ue_id]
         block_flag = self.block_flag_list[ue_id]
 
-        # 飞行距离
-        dis_fly = action[2] * self.flight_speed * self.t_fly  # 1s飞行距离
+        # 飞行距离 - khoảng cách chuyến bay
+        dis_fly = action[2] * self.flight_speed * self.t_fly  # 1s飞行距离 - khoảng cách bay 1s
         # 飞行能耗
         e_fly = (dis_fly / self.t_fly) ** 2 * self.m_uav * self.t_fly * 0.5  # ref: Mobile Edge Computing via a UAV-Mounted Cloudlet: Optimization of Bit Allocation and Path Planning
 
@@ -129,7 +136,7 @@ class UAVEnv(object):
         if self.sum_task_size == 0:  # 计算任务全部完成
             is_terminal = True
             reward = 0
-        elif self.sum_task_size - self.task_list[ue_id] < 0:  # 最后一步计算任务和ue的计算任务不匹配
+        elif self.sum_task_size - self.task_list[ue_id] < 0:  # 最后一步计算任务和ue的计算任务不匹配 - Nhiệm vụ tính toán của bước cuối cùng không khớp với nhiệm vụ tính toán của ue
             self.task_list = np.ones(self.M) * self.sum_task_size
             reward = 0
             step_redo = True
@@ -148,6 +155,8 @@ class UAVEnv(object):
             self.reset2(delay, loc_uav_after_fly_x, loc_uav_after_fly_y, 0, task_size, ue_id)
             offloading_ratio_change = True
         else:  # 电量支持飞行,且计算任务合理,且计算任务能在剩余电量内计算
+            #Sức mạnh hỗ trợ chuyến bay và các tác vụ tính toán là hợp lý và các tác vụ 
+            # tính toán có thể được tính toán trong phạm vi sức mạnh còn lại
             delay = self.com_delay(self.loc_ue_list[ue_id], np.array([loc_uav_after_fly_x, loc_uav_after_fly_y]),
                                    offloading_ratio, task_size, block_flag)  # 计算delay
             reward = -delay

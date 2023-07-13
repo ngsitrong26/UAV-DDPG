@@ -62,24 +62,27 @@ def eval_policy(ddpg, eval_episodes=10):
 ###############################  DDPG  ####################################
 class DDPG(object):
     def __init__(self, a_dim, s_dim, a_bound):
-        self.memory = np.zeros((MEMORY_CAPACITY, s_dim * 2 + a_dim + 1), dtype=np.float32)  # memory里存放当前和下一个state，动作和奖励
+        self.memory = np.zeros((MEMORY_CAPACITY, s_dim * 2 + a_dim + 1), dtype=np.float32)  # lữu trữ trạng thái hiện tại và tiếp theo trong bộ nhớ memory里存放当前和下一个state，动作和奖励
         self.pointer = 0
-        self.sess = tf.Session()
+        self.sess = tf.Session()#chạy các hoạt động của tensorflow
 
-        self.a_dim, self.s_dim, self.a_bound = a_dim, s_dim, a_bound,
-        self.S = tf.placeholder(tf.float32, [None, s_dim], 's')  # 输入
+        self.a_dim, self.s_dim, self.a_bound = a_dim, s_dim, a_bound
+        
+        self.S = tf.placeholder(tf.float32, [None, s_dim], 's')  # 输入 - đi vào
         self.S_ = tf.placeholder(tf.float32, [None, s_dim], 's_')
         self.R = tf.placeholder(tf.float32, [None, 1], 'r')
-
+        #placeholder - trình giữ chỗ cho 1 tensor luôn được nạp
+        # tạo một variable scope - tạo các biến để xây dựng mô hình actor
         with tf.variable_scope('Actor'):
-            self.a = self._build_a(self.S, scope='eval', trainable=True)
-            a_ = self._build_a(self.S_, scope='target', trainable=False)
+            self.a = self._build_a(self.S, scope='eval', trainable=True) # tạo biến a bởi đối số s
+            a_ = self._build_a(self.S_, scope='target', trainable=False) # tạo biến a_ bởi đối số s_
         with tf.variable_scope('Critic'):
             # assign self.a = a in memory when calculating q for td_error,
             # otherwise the self.a is from Actor when updating Actor
             q = self._build_c(self.S, self.a, scope='eval', trainable=True)
             q_ = self._build_c(self.S_, a_, scope='target', trainable=False)
-
+        
+        # get_collection - truy xuất các tập hợp đối tượng(biến, hoạt đông, các tầng mạng...)
         self.ae_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Actor/eval')
         self.at_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Actor/target')
         self.ce_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Critic/eval')
@@ -107,17 +110,23 @@ class DDPG(object):
         return temp[0]
 
     def learn(self):
-        self.sess.run(self.soft_replace)
+        self.sess.run(self.soft_replace) # thực thi hoạt động self.soft_replace
 
-        indices = np.random.choice(MEMORY_CAPACITY, size=BATCH_SIZE)
-        bt = self.memory[indices, :]
-        bs = bt[:, :self.s_dim]
-        ba = bt[:, self.s_dim: self.s_dim + self.a_dim]
-        br = bt[:, -self.s_dim - 1: -self.s_dim]
+        indices = np.random.choice(MEMORY_CAPACITY, size=BATCH_SIZE) #chọn ngẫu nhiên các phần tử từ 1 mảng hoặc 1 dãy số - tạo 1 mảng 64 phần tử có giá trị từ 0 - 9999
+        bt = self.memory[indices, :]# tạo 1 mảng bt có các chỉ số cột như mảng memory, các chỉ số hàng của mảng bt là các phần tử trong mảng indices trong mảng memory
+        bs = bt[:, :self.s_dim] # mảng lưu state
+        ba = bt[:, self.s_dim: self.s_dim + self.a_dim] #mảng lưu hành động
+        br = bt[:, -self.s_dim - 1: -self.s_dim] #
         bs_ = bt[:, -self.s_dim:]
 
+
+        # self.sess.run(self.atrain, {self.S: bs}): Đây là quá trình thực thi quá trình huấn luyện.
+        # Bằng cách gọi self.sess.run(...), bạn thực thi hoạt động self.atrain trong phiên TensorFlow self.sess. 
+        # Trong trường hợp này, bạn cung cấp một feed_dict {self.S: bs} để cung cấp dữ liệu đầu vào cho placeholder self.S. 
+        # Dữ liệu bs được truyền vào placeholder self.S để huấn luyện mô hình.
         self.sess.run(self.atrain, {self.S: bs})
         self.sess.run(self.ctrain, {self.S: bs, self.a: ba, self.R: br, self.S_: bs_})
+        # chạy phần đồ thị atrain và ctrain
 
     def store_transition(self, s, a, r, s_):
         transition = np.hstack((s, a, [r], s_))
@@ -125,6 +134,7 @@ class DDPG(object):
         index = self.pointer % MEMORY_CAPACITY  # replace the old memory with new memory
         self.memory[index, :] = transition
         self.pointer += 1
+        #pointer dùng để xoay vòng lại memory (loại bỏ các phần tử cũ, thay thế bằng phần tử mới)
 
     def _build_a(self, s, scope, trainable):
         with tf.variable_scope(scope):
@@ -132,15 +142,15 @@ class DDPG(object):
             net = tf.layers.dense(net, 300, activation=tf.nn.relu6, name='l2', trainable=trainable)
             net = tf.layers.dense(net, 10, activation=tf.nn.relu, name='l3', trainable=trainable)
             a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
-            return tf.multiply(a, self.a_bound[1], name='scaled_a')
+            return tf.multiply(a, self.a_bound[1], name='scaled_a') # thực hiện phép nhân giữa hai tf
 
     def _build_c(self, s, a, scope, trainable):
         with tf.variable_scope(scope):
-            n_l1 = 400
+            n_l1 = 400 
             w1_s = tf.get_variable('w1_s', [self.s_dim, n_l1], trainable=trainable)
             w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1], trainable=trainable)
             b1 = tf.get_variable('b1', [1, n_l1], trainable=trainable)
-            net = tf.nn.relu6(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1)
+            net = tf.nn.relu6(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1) #ReLu6 áp dụng một phép kích hoạt phi tuyến tính lên kết quả của phép cộng trên. Nó giữ nguyên giá trị đầu vào nếu nó nằm trong khoảng từ 0 đến 6, và chuyển đổi các giá trị âm thành 0 và các giá trị lớn hơn 6 thành 6.
             net = tf.layers.dense(net, 300, activation=tf.nn.relu6, name='l2', trainable=trainable)
             net = tf.layers.dense(net, 10, activation=tf.nn.relu, name='l3', trainable=trainable)
             return tf.layers.dense(net, 1, trainable=trainable)  # Q(s,a)
@@ -152,9 +162,9 @@ tf.set_random_seed(1)
 
 env = UAVEnv()
 MAX_EP_STEPS = env.slot_num
-s_dim = env.state_dim
-a_dim = env.action_dim
-a_bound = env.action_bound  # [-1,1]
+s_dim = env.state_dim # 20 chiều (4ue, 1 uav) - (mỗi cái 4 chiều - remaining task, location, battery)
+a_dim = env.action_dim # 4 chiều
+a_bound = env.action_bound  # [-1,1] 
 
 ddpg = DDPG(a_dim, s_dim, a_bound)
 
@@ -173,6 +183,7 @@ for i in range(MAX_EPISODES):
         # Add exploration noise
         a = ddpg.choose_action(s_normal.state_normal(s))
         a = np.clip(np.random.normal(a, var), *a_bound)  # 高斯噪声add randomness to action selection for exploration
+        #cắt mảng bị giới hạn bởi a_bound
         s_, r, is_terminal, step_redo, offloading_ratio_change, reset_dist = env.step(a)
         if step_redo:
             continue
@@ -180,10 +191,10 @@ for i in range(MAX_EPISODES):
             a[2] = -1
         if offloading_ratio_change:
             a[3] = -1
-        ddpg.store_transition(s_normal.state_normal(s), a, r, s_normal.state_normal(s_))  # 训练奖励缩小10倍
+        ddpg.store_transition(s_normal.state_normal(s), a, r, s_normal.state_normal(s_))  # 训练奖励缩小10倍 - phần thưởng đào tao nhỏ hơn 10 lần
 
         if ddpg.pointer > MEMORY_CAPACITY:
-            # var = max([var * 0.9997, VAR_MIN])  # decay the action randomness
+            # var = max([var * 0.9997, VAR_MIN])  # decay the action randomness - hủy tính ngẫu nhiên cùa hành động
             ddpg.learn()
         s = s_
         ep_reward += r
