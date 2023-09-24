@@ -73,7 +73,7 @@ class UAVEnv(object):
         self.task_list = np.random.randint(2621440, 3145729, self.M)  # 随机计算任务1.5~2Mbits -> 1.5~2 2~2.5 2.5~3 3~3.5 3.5~4
         # self.task_list = np.random.randint(3145728, 3670017, self.M)  # 随机计算任务1.5~2Mbits -> 1.5~2 2~2.5 2.5~3 3~3.5 3.5~4
         # self.task_list = np.random.randint(3670016, 4194305, self.M)  # 随机计算任务1.5~2Mbits -> 1.5~2 2~2.5 2.5~3 3~3.5 3.5~4
-        self.block_flag_list = np.random.randint(0, 2, self.M)  # 4个ue，ue的遮挡情况
+        self.block_flag_list = np.random.randint(0, 2, self.M)  # 4个ue，ue的遮挡情况 - tình trạng tắc ue
 
     def reset(self):
         self.reset_env()
@@ -100,15 +100,16 @@ class UAVEnv(object):
         offloading_ratio_change = False
         reset_dist = False
         action = (action + 1) / 2  # 将取值区间位-1~1的action -> 0~1的action。避免原来action_bound为[0,1]时训练actor网络tanh函数一直取边界0
-        #################寻找最优的服务对象UE######################
-        # 对ddpg进行改进,输出层添加一层用来输出离散动作(实现结果不对)
-        # 采用最近距离算法, 有错误.如果最近距离无人机就一直停在头上了(错)
-        # 随机轮询:先生成一个随机数队列, 服务完就剔除UE, 队列为空再次随机生成(逻辑不对)
-        # 控制变量映射到各个变量的取值区间
+        #Các hành động đặt phạm vi giá trị từ -1~1 -> hành động từ 0~1. Tránh huấn luyện hàm tanh mạng tác nhân luôn lấy ranh giới 0 khi giới hạn hành động ban đầu là [0,1]
+        #################寻找最优的服务对象UE###################### ~ Tìm đối tượng dịch vụ tối ưu UE
+        # 对ddpg进行改进,输出层添加一层用来输出离散动作(实现结果不对) ~ Cải thiện ddpg và thêm một lớp vào lớp đầu ra để xuất ra các hành động rời rạc (kết quả thực hiện không chính xác)
+        # 采用最近距离算法, 有错误.如果最近距离无人机就一直停在头上了(错) ~ Có lỗi khi sử dụng thuật toán khoảng cách gần nhất, nếu sử dụng khoảng cách gần nhất, máy bay không người lái sẽ luôn đậu phía trên đầu (sai)
+        # 随机轮询:先生成一个随机数队列, 服务完就剔除UE, 队列为空再次随机生成(逻辑不对) ~ Thăm dò ngẫu nhiên: Đầu tiên tạo hàng đợi số ngẫu nhiên, xóa UE sau khi dịch vụ hoàn thành và tạo lại ngẫu nhiên nếu hàng đợi trống (lỗi logic)
+        # 控制变量映射到各个变量的取值区间 ~ Các biến điều khiển được ánh xạ tới phạm vi giá trị của từng biến
         if action[0] == 1:
             ue_id = self.M - 1
         else:
-            ue_id = int(self.M * action[0])
+            ue_id = int(self.M * action[0]) #random chọn ue
 
         theta = action[1] * np.pi * 2  # 角度 - góc
         offloading_ratio = action[3]  # ue卸载率 - tỷ lệ giảm tải
@@ -167,7 +168,7 @@ class UAVEnv(object):
     # 重置ue任务大小，剩余总任务大小，ue位置，并记录到文件
     # Đặt lại kích thước tác vụ ue, tổng kích thước tác vụ còn lại, vị trí ue và ghi vào tệp
     def reset2(self, delay, x, y, offloading_ratio, task_size, ue_id):
-        self.sum_task_size -= self.task_list[ue_id]  # 剩余任务量
+        self.sum_task_size -= self.task_list[ue_id]  # 剩余任务量 - nhiệm vụ còn lại
         for i in range(self.M):  # ue随机移动后的位置 - vị trí sau khi di chuyển ngẫu nhiên
             tmp = np.random.rand(2)
             theta_ue = tmp[0] * np.pi * 2  # ue 随机移动角度 - góc chuyển động ngẫu nhiên

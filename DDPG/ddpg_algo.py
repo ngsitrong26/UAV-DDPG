@@ -21,7 +21,7 @@ tf.compat.v1.disable_eager_execution()
 
 #####################  hyper parameters  ####################
 
-MAX_EPISODES = 1000
+MAX_EPISODES = 10
 # MAX_EPISODES = 50000
 
 LR_A = 0.001  # learning rate for actor
