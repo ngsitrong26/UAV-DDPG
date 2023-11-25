@@ -1,17 +1,18 @@
 import numpy as np
 import math
-from UAV_env_GA import UAVEnv 
+from UAV_env import UAVEnv
 import copy
 import matplotlib.pyplot as plt
 
 chromo = 50
 nmbpopu = 64
 populationLimit = 128
-mutation_rate = 0.05
-mutation_rate_1 = 0.05
-mutation_rate_2 = 0.05
+mutation_rate = 0.3
+mutation_rate_1 = 0.3
+mutation_rate_2 = 0.3
 generations = 1000
 x = [] 
+e = 1e-3
 bestState = None
 bestReward = []
 
@@ -25,9 +26,13 @@ class Indv(object):
         env = UAVEnv()
         #self.genes = np.append(self.genes,copy.deepcopy(env))
         for i in range(chromo):
-            action = np.random.rand(1,env.M)
-            env.act = action
+            action = np.random.uniform(-1,1,size = (env.M,))
+            #print(action)
+            # action = action.reshape(env.M)
+            #print(action.shape)
+            env.act = (action + 1) / 2
             _env = copy.deepcopy(env)
+            #print(_env.sum_task_size)
             s_, r, is_terminal, step_redo, offloading_ratio_change, reset_dist = env.step(action)
             _env.sum_task_size = env.sum_task_size
             _env.e_battery_uav = env.e_battery_uav
@@ -35,6 +40,7 @@ class Indv(object):
             self._ep_reward_list = np.append(self._ep_reward_list,r)
             self.genes = np.append(self.genes,_env)
             if is_terminal or step_redo:
+                _env.sum_task_size = 0
                 break
 
 ###############################  training  ####################################
@@ -47,6 +53,8 @@ def GA():
         idv = Indv()
         idv._add_state()
         population = np.append(population,idv)
+        for i in range(len(idv.genes)):
+            print(idv.genes[i].sum_task_size)
     for i in range(generations):
         while(len(population) < populationLimit):
             i1 = np.random.randint(len(population))
@@ -54,7 +62,7 @@ def GA():
             parent1 = population[i1]
             parent2 = population[i2]
             if np.random.rand() < 0.3:
-                child1, child2 = crossOver(parent1,parent2)
+                child1, child2 = crossOver(parent1,parent2) 
                 if  np.random.rand() < mutation_rate:
                     mutation(child1)
                     mutation(child2)
@@ -133,16 +141,17 @@ def update(self):
         dy_uav = loc_uav_after_fly_y - env_.loc_uav[1]
 
         dis_fly = np.sqrt(dx_uav * dx_uav + dy_uav * dy_uav)
+        dis_fly = dis_fly + e
         theta = math.acos(dx_uav / dis_fly)
-        env_.act[0][2] = dis_fly / (env_.flight_speed * env_.t_fly)
-        env_.act[0][1] = theta / (np.pi * 2)
+        env_.act[2] = dis_fly / (env_.flight_speed * env_.t_fly)
+        env_.act[1] = theta / (np.pi * 2)
         e_fly = (dis_fly / env_.t_fly) ** 2 * env_.m_uav * env_.t_fly * 0.5
 
-        if env_.act[0][0] == 1:
+        if env_.act[0] == 1:
             ue_id = env_.M - 1
         else:
-            ue_id = int(env_.M * env_.act[0][0])
-        offloading_ratio = env_.act[0][3]  # ue卸载率 - tỷ lệ giảm tải
+            ue_id = int(env_.M * env_.act[0])
+        offloading_ratio = env_.act[3]  # ue卸载率 - tỷ lệ giảm tải
         task_size = env_.task_list[ue_id]
         block_flag = env_.block_flag_list[ue_id]
         t_server = offloading_ratio * task_size / (env_.f_uav / env_.s)  
@@ -201,18 +210,19 @@ def mutation(self):
     i1 = np.random.randint(len(self.genes))
     i2 = (i1 + 1 + np.random.randint(len(self.genes) - 1)) % (len(self.genes))
     while True:
-        env_ = UAVEnv()
-        self.genes[i1] = env_
+        #env_ = UAVEnv()
+        #self.genes[i1] = env_
+        env_ = self.genes[i1]
         self.genes[i1] = self.genes[i2]
         self.genes[i2] = env_
         i1 = (i1 + 1) % len(self.genes)
         i2 = (i2 - 1) % len(self.genes)
-        if(i1 == i2):
+        if(i1 == i2 or abs(i1 - i2) == 1):
             break
     update(self)
 
 def mutation1(self):
-    x = np.random.randint(len(self.genes),size = 5)
+    x = np.random.randint(len(self.genes),size = 10)
     for i in range(len(x)):
         for j in range(self.genes[x[i]].M):  
             tmp = np.random.rand(2)
@@ -226,7 +236,7 @@ def mutation1(self):
     update(self)
 
 def mutation2(self):
-    x = np.random.randint(len(self.genes),size = 5)
+    x = np.random.randint(len(self.genes),size = 10)
     for i in range(len(x)):
         tmp = np.random.rand(2)
         theta_uav = tmp[0] * np.pi * 2

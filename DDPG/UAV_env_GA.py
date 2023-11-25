@@ -4,7 +4,7 @@ import random
 import numpy as np
 
 
-class UAVEnv(object):
+class UAVEnv_(object):
     height = ground_length = ground_width = 100  # 场地长宽均为100m，UAV飞行高度也是 - Chiều dài và chiều rộng của địa điểm và chiều cao chuyến bay của UAV cũng là 100m 
     sum_task_size = 100 * 1048576  # 总计算任务60 Mbits --> 60 80 100 120 140 - Tổng số tác vụ điện toán 60 Mbits -> 60 80 100 120 140
     loc_uav = [50, 50]
@@ -50,6 +50,7 @@ class UAVEnv(object):
     # 4. biểu thị tốc độ hoàn thành tác vụ hiện tại trên ue ?? tỉ lệ offloading task trên ue
     state_dim = 4 + M * 4  # uav battery remain, uav loc, remaining sum task size, all ue loc, all ue task size, all ue block_flag
     act = np.random.rand(1,M)
+    act = act.reshape(M)
 
     def __init__(self):
         # uav battery remain, uav loc, remaining sum task size, all ue loc, all ue task size, all ue block_flag
@@ -100,7 +101,7 @@ class UAVEnv(object):
         is_terminal = False
         offloading_ratio_change = False
         reset_dist = False
-        action = action.flatten()
+        # action_1 = action.flatten()
         #action = (action + 1) / 2  # 将取值区间位-1~1的action -> 0~1的action。避免原来action_bound为[0,1]时训练actor网络tanh函数一直取边界0
         #Các hành động đặt phạm vi giá trị từ -1~1 -> hành động từ 0~1. Tránh huấn luyện hàm tanh mạng tác nhân luôn lấy ranh giới 0 khi giới hạn hành động ban đầu là [0,1]
         #################寻找最优的服务对象UE###################### ~ Tìm đối tượng dịch vụ tối ưu UE

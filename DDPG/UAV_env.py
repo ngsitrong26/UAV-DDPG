@@ -49,6 +49,7 @@ class UAVEnv(object):
     # 2,3. biểu thị góc bay và khoảng cách
     # 4. biểu thị tốc độ hoàn thành tác vụ hiện tại trên ue ?? tỉ lệ offloading task trên ue
     state_dim = 4 + M * 4  # uav battery remain, uav loc, remaining sum task size, all ue loc, all ue task size, all ue block_flag
+    act = np.random.uniform(0,1,size = (M,))
 
     def __init__(self):
         # uav battery remain, uav loc, remaining sum task size, all ue loc, all ue task size, all ue block_flag
